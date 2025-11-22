@@ -2616,7 +2616,9 @@ function showBonusArrow(sourceColor) {
   
   // Cleanup after animation
   setTimeout(() => {
-    document.body.removeChild(container);
+    if (container && container.parentNode) {
+      container.parentNode.removeChild(container);
+    }
   }, 2000);
 }
 
