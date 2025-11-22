@@ -3747,20 +3747,8 @@ button:hover {
   gap: 10px;
 }
 
-/* Arrow graphic that rotates to point in direction */
-.bonus-arrow-graphic {
-  font-size: 3rem;
-  font-weight: bold;
-  color: #00ff00;
-  text-shadow: 
-    0 0 10px #00ff00,
-    0 0 20px #00ff00,
-    0 0 30px #00ff00;
-  display: inline-block;
-  /* Rotation is set inline via JS based on direction */
-}
-
-/* +4 text that always stays upright (never rotates) */
+/* Common styles for arrow elements */
+.bonus-arrow-graphic,
 .bonus-arrow-text {
   font-size: 3rem;
   font-weight: bold;
@@ -3769,6 +3757,16 @@ button:hover {
     0 0 10px #00ff00,
     0 0 20px #00ff00,
     0 0 30px #00ff00;
+}
+
+/* Arrow graphic that rotates to point in direction */
+.bonus-arrow-graphic {
+  display: inline-block;
+  /* Rotation is set inline via JS based on direction */
+}
+
+/* +4 text that always stays upright (never rotates) */
+.bonus-arrow-text {
   font-family: 'Courier New', monospace;
   white-space: nowrap;
   /* No rotation - always upright and readable */
