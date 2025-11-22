@@ -9,6 +9,8 @@ const path = require('path');
 const PORT = process.env.PORT || 3000;
 
 // Serve static files
+// NOTE: For production, consider serving only a dedicated 'public' folder instead of __dirname
+// to avoid exposing server-side files. This is acceptable for development/testing.
 app.use(express.static(__dirname));
 
 // Timer state for each quadrant
