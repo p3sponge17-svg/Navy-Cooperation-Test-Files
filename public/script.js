@@ -2619,6 +2619,8 @@ function showBonusArrow(sourceColor) {
     arrow.classList.add('shooting');
     arrow.style.left = `${endX}px`;
     arrow.style.top = `${endY}px`;
+    // Preserve the centering transform during movement
+    arrow.style.transform = 'translate(-50%, -50%)';
   }, 500); // Delay to show the "+4" first
   
   // Mark arrow as arrived
