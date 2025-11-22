@@ -1,0 +1,22 @@
+{
+  "name": "navy-cooperation-timer",
+  "version": "1.0.0",
+  "description": "Navy Cooperation Timer with bonus time animations",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": [
+    "timer",
+    "navy",
+    "cooperation",
+    "socketio"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.6.1"
+  }
+}
