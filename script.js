@@ -3,12 +3,12 @@
 // Connect to Socket.IO server
 const socket = io();
 
-// Color map for quadrants
+// Color map for quadrants - defines center position of each quadrant for animations
 const colorMap = {
-    'red': { quadrant: 0, position: { top: '25%', left: '25%' } },
-    'blue': { quadrant: 1, position: { top: '25%', left: '75%' } },
-    'green': { quadrant: 2, position: { top: '75%', left: '25%' } },
-    'yellow': { quadrant: 3, position: { top: '75%', left: '75%' } }
+    'red': { position: { top: '25%', left: '25%' } },
+    'blue': { position: { top: '25%', left: '75%' } },
+    'green': { position: { top: '75%', left: '25%' } },
+    'yellow': { position: { top: '75%', left: '75%' } }
 };
 
 // Initialize timer displays
