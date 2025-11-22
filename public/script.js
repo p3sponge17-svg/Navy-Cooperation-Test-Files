@@ -2551,6 +2551,8 @@ function getSectionByColor(targetColor) {
 
 /**
  * Display animated glowing "+4" bonus arrow shooting to clockwise partner
+ * The arrow graphic rotates to point in the direction of travel, but the "+4" text
+ * always remains upright and readable regardless of direction.
  */
 function showBonusArrow(sourceColor) {
   const targetColor = getClockwisePartner(sourceColor);
@@ -2586,17 +2588,28 @@ function showBonusArrow(sourceColor) {
   indicator.style.transform = 'translate(-50%, -50%)';
   container.appendChild(indicator);
   
-  // Create arrow element
+  // Create arrow element (wrapper for both arrow graphic and text)
   const arrow = document.createElement('div');
   arrow.className = 'bonus-arrow';
-  arrow.textContent = '➜+4';
   arrow.style.left = `${startX}px`;
   arrow.style.top = `${startY}px`;
   arrow.style.transform = 'translate(-50%, -50%)';
   
   // Calculate rotation angle for arrow direction
   const angle = Math.atan2(endY - startY, endX - startX) * (180 / Math.PI);
-  arrow.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+  
+  // Create arrow graphic that rotates
+  const arrowGraphic = document.createElement('div');
+  arrowGraphic.className = 'bonus-arrow-graphic';
+  arrowGraphic.textContent = '➜';
+  arrowGraphic.style.transform = `rotate(${angle}deg)`;
+  arrow.appendChild(arrowGraphic);
+  
+  // Create +4 text that stays upright
+  const bonusText = document.createElement('div');
+  bonusText.className = 'bonus-arrow-text';
+  bonusText.textContent = '+4';
+  arrow.appendChild(bonusText);
   
   container.appendChild(arrow);
   document.body.appendChild(container);
@@ -2606,7 +2619,6 @@ function showBonusArrow(sourceColor) {
     arrow.classList.add('shooting');
     arrow.style.left = `${endX}px`;
     arrow.style.top = `${endY}px`;
-    arrow.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
   }, 500); // Delay to show the "+4" first
   
   // Mark arrow as arrived

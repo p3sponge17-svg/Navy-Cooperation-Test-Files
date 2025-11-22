@@ -3690,6 +3690,8 @@ button:hover {
 
 /* ====================================== */
 /* BONUS ARROW ANIMATION STYLES */
+/* Arrow graphic rotates to show direction */
+/* +4 text always stays upright/readable */
 /* ====================================== */
 
 /* Container for bonus arrow animation */
@@ -3735,9 +3737,18 @@ button:hover {
   }
 }
 
-/* Arrow element that shoots to target */
+/* Arrow container that moves from source to target */
 .bonus-arrow {
   position: absolute;
+  opacity: 0;
+  transition: all 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Arrow graphic that rotates to point in direction */
+.bonus-arrow-graphic {
   font-size: 3rem;
   font-weight: bold;
   color: #00ff00;
@@ -3745,8 +3756,22 @@ button:hover {
     0 0 10px #00ff00,
     0 0 20px #00ff00,
     0 0 30px #00ff00;
-  opacity: 0;
-  transition: all 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  display: inline-block;
+  /* Rotation is set inline via JS based on direction */
+}
+
+/* +4 text that always stays upright (never rotates) */
+.bonus-arrow-text {
+  font-size: 3rem;
+  font-weight: bold;
+  color: #00ff00;
+  text-shadow: 
+    0 0 10px #00ff00,
+    0 0 20px #00ff00,
+    0 0 30px #00ff00;
+  font-family: 'Courier New', monospace;
+  white-space: nowrap;
+  /* No rotation - always upright and readable */
 }
 
 /* Arrow shooting animation */
@@ -3756,5 +3781,5 @@ button:hover {
 
 .bonus-arrow.arrived {
   opacity: 0;
-  transform: scale(1.5);
+  transform: translate(-50%, -50%) scale(1.5);
 }
