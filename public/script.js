@@ -1760,9 +1760,12 @@ function setupFindNine(section, grid, isInteractive = true) {
   statusMessage.style.color = '#00ff00';
 }
 
-// FIX Issue #2: Use server-generated data for synchronized color match game
+// FIX Issue #2: Accept server-generated game data (currently unused for ColorMatch)
+// NOTE: ColorMatch uses client-side cycling which is acceptable since the match
+// is determined by real-time player action, not pre-determined content.
+// Server data structure maintained for consistency with other games.
 function setupColorMatch(section, gameData, isInteractive = true) {
-  console.log(`Setting up Color Match game in section ${section}, interactive: ${isInteractive}, using server data:`, gameData);
+  console.log(`Setting up Color Match game in section ${section}, interactive: ${isInteractive}`);
   
   const colorMatchGame = document.getElementById(`colorMatchGame${section}`);
   colorMatchGame.innerHTML = '';
@@ -1982,17 +1985,6 @@ function setupShapeMemory(section, gameData, isInteractive = true) {
   const targetShape = gameData.targetShape || { shape: '●', color: 'red' };
   const selectionOptions = gameData.selectionOptions || [];
   
-  // Helper to convert color name to hex
-  function getColorHexFromName(colorName) {
-    const colorMap = {
-      'red': '#ff4444',
-      'blue': '#4444ff',
-      'green': '#44aa44',
-      'yellow': '#ffaa00'
-    };
-    return colorMap[colorName] || '#ffffff';
-  }
-  
   const memContainer = document.createElement('div');
   memContainer.className = 'shape-memory-container';
   memContainer.style.display = 'grid';
@@ -2005,7 +1997,7 @@ function setupShapeMemory(section, gameData, isInteractive = true) {
     const shapeDiv = document.createElement('div');
     shapeDiv.textContent = item.shape;
     shapeDiv.style.fontSize = '4rem';
-    shapeDiv.style.color = getColorHexFromName(item.color);
+    shapeDiv.style.color = getColorHex(item.color);
     shapeDiv.style.textAlign = 'center';
     // Add class for circle to normalize size
     if (item.shape === '●') {
@@ -2046,7 +2038,7 @@ function setupShapeMemory(section, gameData, isInteractive = true) {
       const optionDiv = document.createElement('div');
       optionDiv.textContent = option.shape;
       optionDiv.style.fontSize = '4rem';
-      optionDiv.style.color = getColorHexFromName(option.color);
+      optionDiv.style.color = getColorHex(option.color);
       optionDiv.style.cursor = 'none';
       optionDiv.style.padding = '20px';
       optionDiv.style.border = '2px solid transparent';
