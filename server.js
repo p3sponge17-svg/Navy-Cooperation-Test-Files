@@ -137,6 +137,127 @@ function generateFindNineGrid() {
   return grid;
 }
 
+// FIX Issue #2: Server-generated colorMatch game data for synchronization
+function generateColorMatchData() {
+  const colors = ['#ff4444', '#4444ff', '#44aa44', '#ffaa00']; // red, blue, green, yellow
+  const colorNames = ['RED', 'BLUE', 'GREEN', 'YELLOW'];
+  
+  // Random target color (index 0-3)
+  const targetColorIndex = Math.floor(Math.random() * 4);
+  
+  return {
+    targetColorHex: colors[targetColorIndex],
+    targetColorName: colorNames[targetColorIndex]
+  };
+}
+
+// FIX Issue #2: Server-generated shapeMemory game data for synchronization
+function generateShapeMemoryData() {
+  const shapes = ['●', '■', '▲', '◆'];
+  const colors = ['red', 'blue', 'green', 'yellow'];
+  
+  // Shuffle shapes and colors for display
+  const shuffledShapes = [...shapes].sort(() => Math.random() - 0.5);
+  const shuffledColors = [...colors].sort(() => Math.random() - 0.5);
+  
+  // Create 4 memory shapes with unique shape-color combinations
+  const memoryShapes = shuffledShapes.slice(0, 4).map((shape, i) => ({
+    shape: shape,
+    color: shuffledColors[i]
+  }));
+  
+  // Select target shape (the one to remember)
+  const targetIndex = Math.floor(Math.random() * 4);
+  const targetShape = memoryShapes[targetIndex];
+  
+  // Generate wrong options for selection phase
+  const wrongShapes = shapes.filter(s => s !== targetShape.shape)
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 2);
+  
+  const wrongOptions = wrongShapes.map(shape => {
+    const wrongColor = colors.filter(c => c !== targetShape.color)[Math.floor(Math.random() * 3)];
+    return { shape, color: wrongColor };
+  });
+  
+  // Combine target and wrong options, then shuffle
+  const allOptions = [targetShape, ...wrongOptions].sort(() => Math.random() - 0.5);
+  
+  return {
+    memoryShapes: memoryShapes,
+    targetShape: targetShape,
+    selectionOptions: allOptions
+  };
+}
+
+// FIX Issue #2: Server-generated memoryChallenge game data for synchronization
+function generateMemoryChallengeData() {
+  const colors = ['#ff4444', '#4444ff', '#44aa44', '#ffaa00'];
+  
+  // Generate 3 unique numbers (1-9)
+  const memoryData = [];
+  const usedNumbers = new Set();
+  const usedColors = [...colors];
+  
+  for (let i = 0; i < 3; i++) {
+    let number;
+    do {
+      number = Math.floor(Math.random() * 9) + 1;
+    } while (usedNumbers.has(number));
+    usedNumbers.add(number);
+    
+    const colorIndex = Math.floor(Math.random() * usedColors.length);
+    const color = usedColors[colorIndex];
+    usedColors.splice(colorIndex, 1);
+    
+    memoryData.push({ number, color });
+  }
+  
+  // Determine challenge type (1 = color recall, 2 = math recall)
+  // Use balanced randomness (prevent too many consecutive of same type)
+  const challengeType = Math.random() < 0.5 ? 1 : 2;
+  
+  let challengeData = { type: challengeType };
+  
+  if (challengeType === 1) {
+    // Color recall challenge: show a number, player selects its color
+    const randomIndex = Math.floor(Math.random() * memoryData.length);
+    const targetData = memoryData[randomIndex];
+    
+    const correctColor = targetData.color;
+    const wrongColors = colors.filter(color => color !== correctColor)
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 2);
+    
+    const allColorOptions = [correctColor, ...wrongColors].sort(() => Math.random() - 0.5);
+    
+    challengeData.targetNumber = targetData.number;
+    challengeData.correctColor = correctColor;
+    challengeData.colorOptions = allColorOptions;
+  } else {
+    // Math recall challenge: sum all numbers, player selects correct total
+    const correctTotal = memoryData.reduce((sum, data) => sum + data.number, 0);
+    
+    const wrongAnswers = [];
+    while (wrongAnswers.length < 2) {
+      const wrong = correctTotal + (Math.random() < 0.5 ? -1 : 1) * (Math.floor(Math.random() * 3) + 1);
+      if (wrong !== correctTotal && wrong > 0 && wrong < 28 && !wrongAnswers.includes(wrong)) {
+        wrongAnswers.push(wrong);
+      }
+    }
+    
+    const allNumberOptions = [correctTotal, ...wrongAnswers].sort(() => Math.random() - 0.5);
+    
+    challengeData.correctTotal = correctTotal;
+    challengeData.numberOptions = allNumberOptions;
+  }
+  
+  return {
+    memoryData: memoryData,
+    challenge: challengeData
+  };
+}
+
 function generateGameSequence(players) {
   const gameTypes = ['findSix', 'findNine', 'colorMatch', 'shapeMemory', 'memoryChallenge'];
   const playerColors = Object.keys(players);
@@ -164,6 +285,7 @@ function generateGameSequence(players) {
   return sequence;
 }
 
+// FIX Issue #2: Generate ALL game data on server for true synchronization
 function generateGameData(gameType) {
   switch(gameType) {
     case 'findSix':
@@ -171,11 +293,14 @@ function generateGameData(gameType) {
     case 'findNine':
       return { grid: generateFindNineGrid() };
     case 'colorMatch':
-      return {}; // Color match generates its own data on client
+      // Now server-generated for synchronization
+      return generateColorMatchData();
     case 'shapeMemory':
-      return {}; // Shape memory generates its own data on client
+      // Now server-generated for synchronization
+      return generateShapeMemoryData();
     case 'memoryChallenge':
-      return {}; // Memory challenge generates its own data on client
+      // Now server-generated for synchronization
+      return generateMemoryChallengeData();
     default:
       return {};
   }
