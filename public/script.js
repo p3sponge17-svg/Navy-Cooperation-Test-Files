@@ -1084,7 +1084,11 @@ socket.on('returnToMiniGames', (data) => {
     loadGameInSection(index + 1, assignment.gameType, assignment.gameData, playerColor);
   });
   
-  console.log('Mini-games restarted with full timers');
+  // CRITICAL FIX: Restart the countdown to ensure Memory Challenge timing works correctly
+  // The countdown was stopped during Number Sequence, so we need to restart it
+  startCountdown();
+  
+  console.log('Mini-games restarted with full timers and countdown restarted');
 });
 
 socket.on('startNumberSequence', (data) => {
@@ -2488,6 +2492,9 @@ function completeRound(success = true) {
   } else {
     statusMessage.textContent = 'FAILED! -3s FROM PARTNER!';
     statusMessage.style.color = '#ff4444';
+    
+    // Trigger penalty arrow animation
+    showPenaltyArrow(color);
   }
 }
 
@@ -2506,6 +2513,21 @@ function getClockwisePartner(currentColor) {
     'blue': 'green',
     'green': 'red',
     'red': 'yellow'
+  };
+  return colorMapping[currentColor];
+}
+
+/**
+ * Get the previous color in counterclockwise order (for penalties)
+ * Color mapping: yellow←red←green←blue←yellow
+ * Quadrant positions: yellow(top-left) ← red(bottom-left) ← green(bottom-right) ← blue(top-right)
+ */
+function getCounterclockwisePartner(currentColor) {
+  const colorMapping = {
+    'yellow': 'red',
+    'blue': 'yellow',
+    'green': 'blue',
+    'red': 'green'
   };
   return colorMapping[currentColor];
 }
@@ -2551,6 +2573,7 @@ function getSectionByColor(targetColor) {
 
 /**
  * Display animated glowing "+4" bonus arrow shooting to clockwise partner
+ * The arrow and +4 text use the sender's (completer's) color
  */
 function showBonusArrow(sourceColor) {
   const targetColor = getClockwisePartner(sourceColor);
@@ -2573,29 +2596,45 @@ function showBonusArrow(sourceColor) {
   const endX = targetRect.left + targetRect.width / 2;
   const endY = targetRect.top + targetRect.height / 2;
   
+  // Get the sender's color hex value
+  const senderColorHex = getColorHex(sourceColor);
+  
   // Create container
   const container = document.createElement('div');
   container.className = 'bonus-arrow-container';
   
-  // Create "+4" indicator in source quadrant
+  // Create "+4" indicator in source quadrant with sender's color
   const indicator = document.createElement('div');
   indicator.className = 'bonus-indicator';
   indicator.textContent = '+4';
   indicator.style.left = `${startX}px`;
   indicator.style.top = `${startY}px`;
   indicator.style.transform = 'translate(-50%, -50%)';
+  indicator.style.color = senderColorHex;
+  indicator.style.textShadow = `
+    0 0 10px ${senderColorHex},
+    0 0 20px ${senderColorHex},
+    0 0 30px ${senderColorHex},
+    0 0 40px ${senderColorHex}`;
   container.appendChild(indicator);
   
-  // Create arrow element
-  const arrow = document.createElement('div');
-  arrow.className = 'bonus-arrow';
-  arrow.textContent = '➜+4';
-  arrow.style.left = `${startX}px`;
-  arrow.style.top = `${startY}px`;
-  arrow.style.transform = 'translate(-50%, -50%)';
-  
+  // Create arrow element with sender's color
   // Calculate rotation angle for arrow direction
   const angle = Math.atan2(endY - startY, endX - startX) * (180 / Math.PI);
+  
+  const arrow = document.createElement('div');
+  arrow.className = 'bonus-arrow';
+  arrow.style.left = `${startX}px`;
+  arrow.style.top = `${startY}px`;
+  arrow.style.color = senderColorHex;
+  arrow.style.textShadow = `
+    0 0 10px ${senderColorHex},
+    0 0 20px ${senderColorHex},
+    0 0 30px ${senderColorHex}`;
+  
+  // Create arrow content with upright text
+  // The arrow graphic rotates, but the +4 text stays upright
+  arrow.innerHTML = `<span style="display: inline-block; transform: rotate(${-angle}deg);">➜+4</span>`;
   arrow.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
   
   container.appendChild(arrow);
@@ -2608,6 +2647,96 @@ function showBonusArrow(sourceColor) {
     arrow.style.top = `${endY}px`;
     arrow.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
   }, 500); // Delay to show the "+4" first
+  
+  // Mark arrow as arrived
+  setTimeout(() => {
+    arrow.classList.add('arrived');
+  }, 1700); // 500ms delay + 1200ms transition
+  
+  // Cleanup after animation
+  setTimeout(() => {
+    if (container && container.parentNode) {
+      container.parentNode.removeChild(container);
+    }
+  }, 2000);
+}
+
+/**
+ * Display animated penalty "-3" arrow shooting to counterclockwise partner
+ * The arrow graphic uses the sender's color, but the -3 text is white and upright
+ */
+function showPenaltyArrow(sourceColor) {
+  const targetColor = getCounterclockwisePartner(sourceColor);
+  
+  // Get positions
+  const sourceSection = getSectionByColor(sourceColor);
+  const targetSection = getSectionByColor(targetColor);
+  
+  if (!sourceSection || !targetSection) {
+    console.warn('Could not find sections for penalty arrow animation');
+    return;
+  }
+  
+  const sourceRect = sourceSection.getBoundingClientRect();
+  const targetRect = targetSection.getBoundingClientRect();
+  
+  // Calculate centers
+  const startX = sourceRect.left + sourceRect.width / 2;
+  const startY = sourceRect.top + sourceRect.height / 2;
+  const endX = targetRect.left + targetRect.width / 2;
+  const endY = targetRect.top + targetRect.height / 2;
+  
+  // Get the sender's color hex value (for the arrow graphic)
+  const senderColorHex = getColorHex(sourceColor);
+  
+  // Create container
+  const container = document.createElement('div');
+  container.className = 'penalty-arrow-container';
+  
+  // Create "-3" indicator in source quadrant with white color
+  const indicator = document.createElement('div');
+  indicator.className = 'penalty-indicator';
+  indicator.textContent = '-3';
+  indicator.style.left = `${startX}px`;
+  indicator.style.top = `${startY}px`;
+  indicator.style.transform = 'translate(-50%, -50%)';
+  indicator.style.color = '#ffffff';
+  indicator.style.textShadow = `
+    0 0 10px #ff4444,
+    0 0 20px #ff4444,
+    0 0 30px #ff4444,
+    0 0 40px #ff4444`;
+  container.appendChild(indicator);
+  
+  // Create arrow element
+  // Calculate rotation angle for arrow direction
+  const angle = Math.atan2(endY - startY, endX - startX) * (180 / Math.PI);
+  
+  const arrow = document.createElement('div');
+  arrow.className = 'penalty-arrow';
+  arrow.style.left = `${startX}px`;
+  arrow.style.top = `${startY}px`;
+  arrow.style.color = senderColorHex;
+  arrow.style.textShadow = `
+    0 0 10px ${senderColorHex},
+    0 0 20px ${senderColorHex},
+    0 0 30px ${senderColorHex}`;
+  
+  // Create arrow content with upright white text
+  // The arrow graphic rotates and uses sender's color, but the -3 text stays upright and white
+  arrow.innerHTML = `<span style="display: inline-block; transform: rotate(${-angle}deg); color: #ffffff; text-shadow: 0 0 10px #ff4444, 0 0 20px #ff4444, 0 0 30px #ff4444;">➜-3</span>`;
+  arrow.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+  
+  container.appendChild(arrow);
+  document.body.appendChild(container);
+  
+  // Animate arrow shooting to target
+  setTimeout(() => {
+    arrow.classList.add('shooting');
+    arrow.style.left = `${endX}px`;
+    arrow.style.top = `${endY}px`;
+    arrow.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+  }, 500); // Delay to show the "-3" first
   
   // Mark arrow as arrived
   setTimeout(() => {
