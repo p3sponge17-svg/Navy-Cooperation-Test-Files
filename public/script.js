@@ -2582,8 +2582,7 @@ function showBonusArrow(sourceColor) {
     arrowWrapper.style.left = `${endX}px`;
     arrowWrapper.style.top = `${endY}px`;
     arrowWrapper.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
-    // Update counter-rotation as arrow moves (keeps text upright)
-    arrowText.style.transform = `rotate(${-angle}deg)`;
+    // Text counter-rotation is already applied at line 2571, no need to re-apply
   }, 500); // Delay to show the "+4" first
   
   // Mark arrow as arrived
