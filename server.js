@@ -176,7 +176,8 @@ function generateShapeMemoryData() {
     .slice(0, 2);
   
   const wrongOptions = wrongShapes.map(shape => {
-    const wrongColor = colors.filter(c => c !== targetShape.color)[Math.floor(Math.random() * 3)];
+    const availableColors = colors.filter(c => c !== targetShape.color);
+    const wrongColor = availableColors[Math.floor(Math.random() * availableColors.length)];
     return { shape, color: wrongColor };
   });
   
@@ -238,9 +239,11 @@ function generateMemoryChallengeData() {
     // Math recall challenge: sum all numbers, player selects correct total
     const correctTotal = memoryData.reduce((sum, data) => sum + data.number, 0);
     
+    // Generate wrong answers (avoid correctTotal, ensure positive, max possible is 9+9+9=27)
     const wrongAnswers = [];
     while (wrongAnswers.length < 2) {
       const wrong = correctTotal + (Math.random() < 0.5 ? -1 : 1) * (Math.floor(Math.random() * 3) + 1);
+      // Validate: wrong != correct, positive, < 28 (max possible sum is 27), unique
       if (wrong !== correctTotal && wrong > 0 && wrong < 28 && !wrongAnswers.includes(wrong)) {
         wrongAnswers.push(wrong);
       }
