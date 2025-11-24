@@ -1986,9 +1986,9 @@ function setupShapeMemory(section, gameData, isInteractive = true) {
   const colorMatchGame = document.getElementById(`colorMatchGame${section}`);
   colorMatchGame.innerHTML = '';
   
-  // Use server-provided data
-  const memoryShapes = gameData.memoryShapes || [];
-  const targetIndex = gameData.targetIndex || 0;
+  // Use server-provided data or fallback
+  let memoryShapes = gameData.memoryShapes || [];
+  let targetIndex = gameData.targetIndex || 0;
   
   // Fallback to client generation if no server data (shouldn't happen)
   if (memoryShapes.length === 0) {
@@ -1997,10 +1997,12 @@ function setupShapeMemory(section, gameData, isInteractive = true) {
     const colors = ['red', 'blue', 'green', 'yellow'];
     const shuffledShapes = [...shapes].sort(() => Math.random() - 0.5);
     const shuffledColors = [...colors].sort(() => Math.random() - 0.5);
-    memoryShapes.push(...shuffledShapes.slice(0, 4).map((shape, i) => ({
+    // Create a new array instead of modifying
+    memoryShapes = shuffledShapes.slice(0, 4).map((shape, i) => ({
       shape: shape,
       color: shuffledColors[i]
-    })));
+    }));
+    targetIndex = Math.floor(Math.random() * 4);
   }
   
   const targetShape = memoryShapes[targetIndex];
@@ -2181,8 +2183,8 @@ function setupMemoryChallenge(section, gameData, isInteractive = true) {
 
     // Use server-provided memory data if available
     if (!gameState.memoryData || gameState.memoryData.length === 0) {
-      // Fallback: Generate memory data (shouldn't happen with server data)
-      console.warn('No server data for memory challenge, using fallback');
+      // Fallback: Generate memory data using seeded random (shouldn't happen with server data)
+      console.warn('No server data for memory challenge, using fallback with seeded random');
       gameState.memoryData = [];
       const usedNumbers = new Set();
       const usedColors = [...colors];
@@ -2190,11 +2192,11 @@ function setupMemoryChallenge(section, gameData, isInteractive = true) {
       for (let i = 0; i < 3; i++) {
         let number;
         do {
-          number = Math.floor(Math.random() * 9) + 1;
+          number = Math.floor(seededRandom() * 9) + 1;
         } while (usedNumbers.has(number));
         usedNumbers.add(number);
         
-        const colorIndex = Math.floor(Math.random() * usedColors.length);
+        const colorIndex = Math.floor(seededRandom() * usedColors.length);
         const color = usedColors[colorIndex];
         usedColors.splice(colorIndex, 1);
         
@@ -2522,8 +2524,8 @@ function completeRound(success = true) {
     statusMessage.textContent = 'COMPLETED! +4s TO PARTNER!';
     statusMessage.style.color = '#00ff00';
     
-    // Trigger bonus arrow animation
-    showBonusArrow(color);
+    // Note: Bonus arrow animation will be triggered by server's bonusAnimation event
+    // which ensures all players see it, not just the one who completed the game
   } else {
     statusMessage.textContent = 'FAILED! -3s FROM PARTNER!';
     statusMessage.style.color = '#ff4444';
