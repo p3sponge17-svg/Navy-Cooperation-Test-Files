@@ -1230,22 +1230,22 @@ function loadGameInSection(section, gameType, gameData, playerColor) {
       gameTitle.textContent = 'COLOR MATCH';
       grid.style.display = 'none';
       colorMatchGame.style.display = 'flex';
-      // Always set up the game, but only make it interactive for the owner
-      setupColorMatch(section, isMySection);
+      // FIX Issue #2: Pass server-generated gameData for synchronization
+      setupColorMatch(section, gameData, isMySection);
       break;
     case 'shapeMemory':
       gameTitle.textContent = 'SHAPE MEMORY';
       grid.style.display = 'none';
       colorMatchGame.style.display = 'flex';
-      // Always set up the game, but only make it interactive for the owner
-      setupShapeMemory(section, isMySection);
+      // FIX Issue #2: Pass server-generated gameData for synchronization
+      setupShapeMemory(section, gameData, isMySection);
       break;
     case 'memoryChallenge':
       gameTitle.textContent = 'MEMORY CHALLENGE';
       grid.style.display = 'none';
       colorMatchGame.style.display = 'flex';
-      // Always set up the game, but only make it interactive for the owner
-      setupMemoryChallenge(section, isMySection);
+      // FIX Issue #2: Pass server-generated gameData for synchronization
+      setupMemoryChallenge(section, gameData, isMySection);
       break;
   }
   
@@ -1760,7 +1760,11 @@ function setupFindNine(section, grid, isInteractive = true) {
   statusMessage.style.color = '#00ff00';
 }
 
-function setupColorMatch(section, isInteractive = true) {
+// FIX Issue #2: Accept server-generated game data (currently unused for ColorMatch)
+// NOTE: ColorMatch uses client-side cycling which is acceptable since the match
+// is determined by real-time player action, not pre-determined content.
+// Server data structure maintained for consistency with other games.
+function setupColorMatch(section, gameData, isInteractive = true) {
   console.log(`Setting up Color Match game in section ${section}, interactive: ${isInteractive}`);
   
   const colorMatchGame = document.getElementById(`colorMatchGame${section}`);
@@ -1768,6 +1772,9 @@ function setupColorMatch(section, isInteractive = true) {
 
   const colors = ['red', 'blue', 'green', 'yellow'];
   const colorNames = ['RED', 'BLUE', 'GREEN', 'YELLOW'];
+  
+  // NOTE: Server provides synchronized game data structure for future enhancements
+  // Current implementation uses client-side random cycling which is acceptable for this game type
   
   // Reset match counter (only for interactive)
   if (isInteractive) {
@@ -1965,25 +1972,18 @@ function setupColorMatch(section, isInteractive = true) {
   statusMessage.style.color = '#00ff00';
 }
 
-function setupShapeMemory(section, isInteractive = true) {
-  console.log(`Setting up Shape Memory game in section ${section}, interactive: ${isInteractive}`);
+// FIX Issue #2 & #3: Use server-generated data for synchronized shape memory game
+// and ensure preview phase always displays before selection phase
+function setupShapeMemory(section, gameData, isInteractive = true) {
+  console.log(`Setting up Shape Memory game in section ${section}, interactive: ${isInteractive}, using server data:`, gameData);
   
   const colorMatchGame = document.getElementById(`colorMatchGame${section}`);
   colorMatchGame.innerHTML = '';
   
-  const shapes = ['●', '■', '▲', '◆'];
-  const colors = ['red', 'blue', 'green', 'yellow'];
-  
-  const shuffledShapes = [...shapes].sort(() => Math.random() - 0.5);
-  const shuffledColors = [...colors].sort(() => Math.random() - 0.5);
-  
-  const memoryShapes = shuffledShapes.slice(0, 4).map((shape, i) => ({
-    shape: shape,
-    color: shuffledColors[i]
-  }));
-  
-  const targetIndex = Math.floor(Math.random() * 4);
-  const targetShape = memoryShapes[targetIndex];
+  // FIX Issue #2: Use server-provided data for all players (synchronized)
+  const memoryShapes = gameData.memoryShapes || [];
+  const targetShape = gameData.targetShape || { shape: '●', color: 'red' };
+  const selectionOptions = gameData.selectionOptions || [];
   
   const memContainer = document.createElement('div');
   memContainer.className = 'shape-memory-container';
@@ -1992,6 +1992,7 @@ function setupShapeMemory(section, isInteractive = true) {
   memContainer.style.gap = '20px';
   memContainer.style.margin = '20px 0';
   
+  // FIX Issue #3: Display preview phase - always show shapes first
   memoryShapes.forEach(item => {
     const shapeDiv = document.createElement('div');
     shapeDiv.textContent = item.shape;
@@ -2011,7 +2012,15 @@ function setupShapeMemory(section, isInteractive = true) {
   statusMessage.textContent = 'MEMORIZE SHAPES AND COLORS';
   statusMessage.style.color = '#00ff00';
   
-  waitForCountdownThen(() => {
+  // FIX Issue #3: Use robust state management for preview-to-selection transition
+  // Always wait for game countdown to start PLUS a fixed 4-second delay
+  const showSelectionPhase = () => {
+    // Safety check: ensure container still exists and hasn't been replaced
+    if (!colorMatchGame.contains(memContainer)) {
+      console.warn('Shape memory container was removed - aborting selection phase');
+      return;
+    }
+    
     memContainer.innerHTML = '';
     
     const instruction = document.createElement('div');
@@ -2020,21 +2029,12 @@ function setupShapeMemory(section, isInteractive = true) {
     instruction.style.marginBottom = '20px';
     memContainer.appendChild(instruction);
     
-    const options = [targetShape];
-    const wrongShapes = shapes.filter(s => s !== targetShape.shape).sort(() => Math.random() - 0.5).slice(0, 2);
-    wrongShapes.forEach(shape => {
-      const wrongColor = colors.filter(c => c !== targetShape.color)[Math.floor(Math.random() * 3)];
-      options.push({ shape, color: wrongColor });
-    });
-    
-    options.sort(() => Math.random() - 0.5);
-    
     const optionsContainer = document.createElement('div');
     optionsContainer.style.display = 'flex';
     optionsContainer.style.gap = '30px';
     optionsContainer.style.justifyContent = 'center';
     
-    options.forEach((option) => {
+    selectionOptions.forEach((option) => {
       const optionDiv = document.createElement('div');
       optionDiv.textContent = option.shape;
       optionDiv.style.fontSize = '4rem';
@@ -2104,29 +2104,32 @@ function setupShapeMemory(section, isInteractive = true) {
     
     memContainer.appendChild(optionsContainer);
     statusMessage.textContent = isInteractive ? 'SELECT THE MATCHING SHAPE' : 'PARTNER\'S GAME';
-  }, 4000);
+  };
+  
+  // FIX Issue #3: Robust timing - wait for game countdown + 4 seconds
+  waitForCountdownThen(showSelectionPhase, 4000);
 }
 
 // Memory Challenge Game
-function setupMemoryChallenge(section, isInteractive = true) {
-  console.log(`Setting up Memory Challenge game in section ${section}, interactive: ${isInteractive}`);
+// FIX Issue #2: Use server-generated data for synchronized memory challenge game
+function setupMemoryChallenge(section, gameData, isInteractive = true) {
+  console.log(`Setting up Memory Challenge game in section ${section}, interactive: ${isInteractive}, using server data:`, gameData);
   
   const colorMatchGame = document.getElementById(`colorMatchGame${section}`);
   colorMatchGame.innerHTML = '';
 
+  // FIX Issue #2: Use server-provided memory data (synchronized across all clients)
+  const memoryData = gameData.memoryData || [];
+  const challenge = gameData.challenge || { type: 1 };
+  
   // Game state for this section
   const gameState = {
     active: isInteractive, // Only active if interactive
     phase: 'memory',
-    memoryData: null,
-    currentChallenge: null,
-    consecutiveType1: 0,
-    consecutiveType2: 0,
-    maxConsecutive: 3,
+    memoryData: memoryData,
+    currentChallenge: challenge,
     transitionTimeout: null  // Track timeout for cleanup
   };
-
-  const colors = ['#ff4444', '#4444ff', '#44aa44', '#ffaa00'];
 
   function setupMemoryPhase() {
     const memoryContainer = document.createElement('div');
@@ -2147,24 +2150,8 @@ function setupMemoryChallenge(section, isInteractive = true) {
     memoryDisplay.style.margin = '20px 0';
     memoryDisplay.style.flexWrap = 'wrap';
 
-    // Generate memory data
-    gameState.memoryData = [];
-    const usedNumbers = new Set();
-    const usedColors = [...colors];
-    
-    for (let i = 0; i < 3; i++) {
-      let number;
-      do {
-        number = Math.floor(Math.random() * 9) + 1;
-      } while (usedNumbers.has(number));
-      usedNumbers.add(number);
-      
-      const colorIndex = Math.floor(Math.random() * usedColors.length);
-      const color = usedColors[colorIndex];
-      usedColors.splice(colorIndex, 1);
-      
-      gameState.memoryData.push({ number, color });
-      
+    // Display server-provided memory data
+    memoryData.forEach(data => {
       const circle = document.createElement('div');
       circle.style.width = '80px';
       circle.style.height = '80px';
@@ -2178,10 +2165,10 @@ function setupMemoryChallenge(section, isInteractive = true) {
       circle.style.textShadow = '0 0 5px #000';
       circle.style.border = '3px solid #000';
       circle.style.boxShadow = '0 0 0 3px #000, 0 0 0 6px currentColor';
-      circle.style.color = color;
-      circle.textContent = number;
+      circle.style.color = data.color;
+      circle.textContent = data.number;
       memoryDisplay.appendChild(circle);
-    }
+    });
 
     memoryContainer.appendChild(heading);
     memoryContainer.appendChild(memoryDisplay);
@@ -2193,7 +2180,7 @@ function setupMemoryChallenge(section, isInteractive = true) {
       gameState.transitionTimeout = null;
     }
 
-    // Transition to challenge phase after 4 seconds
+    // FIX Issue #3: Robust timing - transition to challenge phase after game countdown + 4 seconds
     waitForCountdownThen(() => {
       // Only proceed if the game is still active and container still exists
       if (gameState.active && memoryContainer.parentNode) {
@@ -2207,30 +2194,8 @@ function setupMemoryChallenge(section, isInteractive = true) {
     const challengeContainer = document.createElement('div');
     challengeContainer.className = 'challenge-container';
     
-    // Determine challenge type with balanced randomness
-    let challengeType;
-    if (gameState.consecutiveType1 >= gameState.maxConsecutive) {
-      challengeType = 2;
-    } else if (gameState.consecutiveType2 >= gameState.maxConsecutive) {
-      challengeType = 1;
-    } else {
-      challengeType = Math.random() < 0.5 ? 1 : 2;
-    }
-    
-    if (challengeType === 1) {
-      gameState.consecutiveType1++;
-      gameState.consecutiveType2 = 0;
-    } else {
-      gameState.consecutiveType2++;
-      gameState.consecutiveType1 = 0;
-    }
-    
-    gameState.currentChallenge = {
-      type: challengeType,
-      correctAnswer: null
-    };
-
-    if (challengeType === 1) {
+    // Use server-provided challenge type
+    if (challenge.type === 1) {
       setupColorRecallChallenge(challengeContainer);
     } else {
       setupMathRecallChallenge(challengeContainer);
@@ -2240,8 +2205,9 @@ function setupMemoryChallenge(section, isInteractive = true) {
   }
 
   function setupColorRecallChallenge(container) {
-    const randomIndex = Math.floor(Math.random() * gameState.memoryData.length);
-    const targetData = gameState.memoryData[randomIndex];
+    const targetNumber = challenge.targetNumber;
+    const correctColor = challenge.correctColor;
+    const colorOptions = challenge.colorOptions;
     
     const numberDisplay = document.createElement('div');
     numberDisplay.style.fontSize = '3.5rem';
@@ -2250,7 +2216,7 @@ function setupMemoryChallenge(section, isInteractive = true) {
     numberDisplay.style.textShadow = '0 0 15px #ffffff';
     numberDisplay.style.marginBottom = '30px';
     numberDisplay.style.letterSpacing = '3px';
-    numberDisplay.textContent = targetData.number;
+    numberDisplay.textContent = targetNumber;
     container.appendChild(numberDisplay);
     
     const optionsContainer = document.createElement('div');
@@ -2260,14 +2226,7 @@ function setupMemoryChallenge(section, isInteractive = true) {
     optionsContainer.style.marginTop = '20px';
     optionsContainer.style.flexWrap = 'wrap';
     
-    const correctColor = targetData.color;
-    const wrongColors = colors.filter(color => color !== correctColor)
-                            .sort(() => Math.random() - 0.5)
-                            .slice(0, 2);
-    
-    const allOptions = [correctColor, ...wrongColors].sort(() => Math.random() - 0.5);
-    
-    allOptions.forEach((color, index) => {
+    colorOptions.forEach((colorHex, index) => {
       const option = document.createElement('div');
       option.style.width = '70px';
       option.style.height = '70px';
@@ -2275,10 +2234,10 @@ function setupMemoryChallenge(section, isInteractive = true) {
       option.style.cursor = 'none';
       option.style.border = '3px solid #000';
       option.style.boxShadow = '0 0 0 3px #000, 0 0 0 6px currentColor';
-      option.style.backgroundColor = color;
+      option.style.backgroundColor = colorHex;
       option.style.transition = 'all 0.3s ease';
-      option.dataset.color = color;
-      option.dataset.correct = (color === correctColor).toString();
+      option.dataset.color = colorHex;
+      option.dataset.correct = (colorHex === correctColor).toString();
       
       option.onmouseenter = () => {
         if (ownCursor && isInteractive) ownCursor.style.transform = 'scale(1.3)';
@@ -2342,7 +2301,6 @@ function setupMemoryChallenge(section, isInteractive = true) {
     });
     
     container.appendChild(optionsContainer);
-    gameState.currentChallenge.correctAnswer = correctColor;
     
     const statusMessage = document.getElementById(`statusMessage${section}`);
     statusMessage.textContent = 'SELECT THE CORRECT COLOR';
@@ -2350,17 +2308,8 @@ function setupMemoryChallenge(section, isInteractive = true) {
   }
 
   function setupMathRecallChallenge(container) {
-    const correctTotal = gameState.memoryData.reduce((sum, data) => sum + data.number, 0);
-    
-    const wrongAnswers = [];
-    while (wrongAnswers.length < 2) {
-      const wrong = correctTotal + (Math.random() < 0.5 ? -1 : 1) * (Math.floor(Math.random() * 3) + 1);
-      if (wrong !== correctTotal && wrong > 0 && wrong < 28 && !wrongAnswers.includes(wrong)) {
-        wrongAnswers.push(wrong);
-      }
-    }
-    
-    const allOptions = [correctTotal, ...wrongAnswers].sort(() => Math.random() - 0.5);
+    const correctTotal = challenge.correctTotal;
+    const numberOptions = challenge.numberOptions;
     
     const optionsContainer = document.createElement('div');
     optionsContainer.style.display = 'flex';
@@ -2369,7 +2318,7 @@ function setupMemoryChallenge(section, isInteractive = true) {
     optionsContainer.style.marginTop = '20px';
     optionsContainer.style.flexWrap = 'wrap';
     
-    allOptions.forEach((number, index) => {
+    numberOptions.forEach((number, index) => {
       const option = document.createElement('div');
       option.style.width = '70px';
       option.style.height = '70px';
@@ -2452,7 +2401,6 @@ function setupMemoryChallenge(section, isInteractive = true) {
     });
     
     container.appendChild(optionsContainer);
-    gameState.currentChallenge.correctAnswer = correctTotal;
     
     const statusMessage = document.getElementById(`statusMessage${section}`);
     statusMessage.textContent = 'SELECT THE CORRECT TOTAL';
@@ -2466,7 +2414,6 @@ function setupMemoryChallenge(section, isInteractive = true) {
   statusMessage.textContent = isInteractive ? 'MEMORIZE THE COLORS AND NUMBERS' : 'PARTNER\'S GAME';
   statusMessage.style.color = '#00ff00';
 }
-
 function completeRound(success = true) {
   console.log(`Completing round for ${color}, section ${sectionIndex}, success: ${success}`);
   console.log('Current game type:', myGameType);
@@ -2551,6 +2498,7 @@ function getSectionByColor(targetColor) {
 
 /**
  * Display animated glowing "+4" bonus arrow shooting to clockwise partner
+ * FIX: Separate arrow graphic (rotates) from text (stays upright) for readability
  */
 function showBonusArrow(sourceColor) {
   const targetColor = getClockwisePartner(sourceColor);
@@ -2586,32 +2534,61 @@ function showBonusArrow(sourceColor) {
   indicator.style.transform = 'translate(-50%, -50%)';
   container.appendChild(indicator);
   
-  // Create arrow element
-  const arrow = document.createElement('div');
-  arrow.className = 'bonus-arrow';
-  arrow.textContent = '➜+4';
-  arrow.style.left = `${startX}px`;
-  arrow.style.top = `${startY}px`;
-  arrow.style.transform = 'translate(-50%, -50%)';
-  
   // Calculate rotation angle for arrow direction
   const angle = Math.atan2(endY - startY, endX - startX) * (180 / Math.PI);
-  arrow.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
   
-  container.appendChild(arrow);
+  // Create arrow wrapper (this rotates)
+  const arrowWrapper = document.createElement('div');
+  arrowWrapper.className = 'bonus-arrow-wrapper';
+  arrowWrapper.style.left = `${startX}px`;
+  arrowWrapper.style.top = `${startY}px`;
+  arrowWrapper.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+  arrowWrapper.style.position = 'absolute';
+  arrowWrapper.style.display = 'flex';
+  arrowWrapper.style.alignItems = 'center';
+  arrowWrapper.style.gap = '10px';
+  arrowWrapper.style.opacity = '0';
+  arrowWrapper.style.transition = 'all 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+  
+  // Create arrow graphic (rotates with wrapper)
+  const arrowGraphic = document.createElement('div');
+  arrowGraphic.className = 'bonus-arrow-graphic';
+  arrowGraphic.textContent = '➜';
+  arrowGraphic.style.fontSize = '3rem';
+  arrowGraphic.style.fontWeight = 'bold';
+  arrowGraphic.style.color = '#00ff00';
+  arrowGraphic.style.textShadow = '0 0 10px #00ff00, 0 0 20px #00ff00, 0 0 30px #00ff00';
+  
+  // Create text element (counter-rotates to stay upright)
+  const arrowText = document.createElement('div');
+  arrowText.className = 'bonus-arrow-text';
+  arrowText.textContent = '+4';
+  arrowText.style.fontSize = '2.5rem';
+  arrowText.style.fontWeight = 'bold';
+  arrowText.style.color = '#00ff00';
+  arrowText.style.textShadow = '0 0 10px #00ff00, 0 0 20px #00ff00, 0 0 30px #00ff00';
+  // Counter-rotate text to keep it upright
+  arrowText.style.transform = `rotate(${-angle}deg)`;
+  arrowText.style.fontFamily = "'Courier New', monospace";
+  
+  arrowWrapper.appendChild(arrowGraphic);
+  arrowWrapper.appendChild(arrowText);
+  container.appendChild(arrowWrapper);
   document.body.appendChild(container);
   
   // Animate arrow shooting to target
   setTimeout(() => {
-    arrow.classList.add('shooting');
-    arrow.style.left = `${endX}px`;
-    arrow.style.top = `${endY}px`;
-    arrow.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+    arrowWrapper.style.opacity = '1';
+    arrowWrapper.style.left = `${endX}px`;
+    arrowWrapper.style.top = `${endY}px`;
+    arrowWrapper.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+    // Text counter-rotation is already applied at line 2571, no need to re-apply
   }, 500); // Delay to show the "+4" first
   
   // Mark arrow as arrived
   setTimeout(() => {
-    arrow.classList.add('arrived');
+    arrowWrapper.style.opacity = '0';
+    arrowWrapper.style.transform = `translate(-50%, -50%) rotate(${angle}deg) scale(1.5)`;
   }, 1700); // 500ms delay + 1200ms transition
   
   // Cleanup after animation
