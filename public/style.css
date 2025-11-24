@@ -3758,3 +3758,81 @@ button:hover {
   opacity: 0;
   transform: scale(1.5);
 }
+
+/* ====================================
+   PENALTY ARROW ANIMATION STYLES
+   ==================================== */
+
+.penalty-arrow-container {
+  position: fixed;
+  pointer-events: none;
+  z-index: 10000;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+}
+
+/* The "-3" penalty indicator (white text) */
+.penalty-indicator {
+  position: absolute;
+  font-size: 4rem;
+  font-weight: bold;
+  color: #ffffff;
+  text-shadow: 
+    0 0 10px #ff4444,
+    0 0 20px #ff4444,
+    0 0 30px #ff4444,
+    0 0 40px #ff4444;
+  animation: penaltyPulse 0.5s ease-in-out;
+  font-family: 'Courier New', monospace;
+}
+
+/* Pulse animation for the penalty indicator */
+@keyframes penaltyPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.8;
+    text-shadow: 
+      0 0 20px #ff4444,
+      0 0 40px #ff4444,
+      0 0 60px #ff4444,
+      0 0 80px #ff4444;
+  }
+}
+
+/* Penalty arrow element that shoots to target (sender's color for arrow graphic) */
+.penalty-arrow {
+  position: absolute;
+  font-size: 3rem;
+  font-weight: bold;
+  opacity: 0;
+  transition: all 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Penalty arrow shooting animation */
+.penalty-arrow.shooting {
+  opacity: 1;
+}
+
+.penalty-arrow.arrived {
+  opacity: 0;
+  transform: scale(1.5);
+}
+
+/* Upright text styles for arrows */
+.arrow-text-upright {
+  display: inline-block;
+}
+
+.arrow-text-white {
+  color: #ffffff;
+  text-shadow: 
+    0 0 10px #ff4444,
+    0 0 20px #ff4444,
+    0 0 30px #ff4444;
+}
