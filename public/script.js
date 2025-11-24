@@ -2634,7 +2634,7 @@ function showBonusArrow(sourceColor) {
   
   // Create arrow content with upright text
   // The arrow graphic (➜) rotates to point in the direction, but the +4 text stays upright
-  arrow.innerHTML = `➜<span style="display: inline-block; transform: rotate(${-angle}deg);">+4</span>`;
+  arrow.innerHTML = `➜<span class="arrow-text-upright" style="transform: rotate(${-angle}deg);">+4</span>`;
   arrow.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
   
   container.appendChild(arrow);
@@ -2700,12 +2700,6 @@ function showPenaltyArrow(sourceColor) {
   indicator.style.left = `${startX}px`;
   indicator.style.top = `${startY}px`;
   indicator.style.transform = 'translate(-50%, -50%)';
-  indicator.style.color = '#ffffff';
-  indicator.style.textShadow = `
-    0 0 10px #ff4444,
-    0 0 20px #ff4444,
-    0 0 30px #ff4444,
-    0 0 40px #ff4444`;
   container.appendChild(indicator);
   
   // Create arrow element
@@ -2724,7 +2718,7 @@ function showPenaltyArrow(sourceColor) {
   
   // Create arrow content with upright white text
   // The arrow graphic (➜) rotates and uses sender's color, but the -3 text stays upright and white
-  arrow.innerHTML = `➜<span style="display: inline-block; transform: rotate(${-angle}deg); color: #ffffff; text-shadow: 0 0 10px #ff4444, 0 0 20px #ff4444, 0 0 30px #ff4444;">-3</span>`;
+  arrow.innerHTML = `➜<span class="arrow-text-upright arrow-text-white" style="transform: rotate(${-angle}deg);">-3</span>`;
   arrow.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
   
   container.appendChild(arrow);

@@ -3823,3 +3823,16 @@ button:hover {
   opacity: 0;
   transform: scale(1.5);
 }
+
+/* Upright text styles for arrows */
+.arrow-text-upright {
+  display: inline-block;
+}
+
+.arrow-text-white {
+  color: #ffffff;
+  text-shadow: 
+    0 0 10px #ff4444,
+    0 0 20px #ff4444,
+    0 0 30px #ff4444;
+}
