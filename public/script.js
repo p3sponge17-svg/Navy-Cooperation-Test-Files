@@ -1085,7 +1085,9 @@ socket.on('returnToMiniGames', (data) => {
   });
   
   // CRITICAL FIX: Restart the countdown to ensure Memory Challenge timing works correctly
-  // The countdown was stopped during Number Sequence, so we need to restart it
+  // The countdownInterval was cleared (set to null) during Number Sequence transition,
+  // which stops the personal timer countdown. We need to restart it here so that
+  // the Memory Challenge's waitForCountdownThen function works correctly.
   startCountdown();
   
   console.log('Mini-games restarted with full timers and countdown restarted');
