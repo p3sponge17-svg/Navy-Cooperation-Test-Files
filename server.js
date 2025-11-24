@@ -164,6 +164,68 @@ function generateGameSequence(players) {
   return sequence;
 }
 
+function generateColorMatchData() {
+  // Generate random initial states for color and name
+  const colors = ['red', 'blue', 'green', 'yellow'];
+  const colorIndex = Math.floor(Math.random() * colors.length);
+  const nameIndex = Math.floor(Math.random() * colors.length);
+  
+  return {
+    initialColorIndex: colorIndex,
+    initialNameIndex: nameIndex,
+    seed: Math.random() // Random seed for deterministic cycling
+  };
+}
+
+function generateShapeMemoryData() {
+  const shapes = ['●', '■', '▲', '◆'];
+  const colors = ['red', 'blue', 'green', 'yellow'];
+  
+  // Shuffle and create memory shapes
+  const shuffledShapes = [...shapes].sort(() => Math.random() - 0.5);
+  const shuffledColors = [...colors].sort(() => Math.random() - 0.5);
+  
+  const memoryShapes = shuffledShapes.slice(0, 4).map((shape, i) => ({
+    shape: shape,
+    color: shuffledColors[i]
+  }));
+  
+  const targetIndex = Math.floor(Math.random() * 4);
+  
+  return {
+    memoryShapes: memoryShapes,
+    targetIndex: targetIndex
+  };
+}
+
+function generateMemoryChallengeData() {
+  const colors = ['#ff4444', '#4444ff', '#44aa44', '#ffaa00'];
+  
+  // Generate memory data - 3 circles with unique numbers and colors
+  const memoryData = [];
+  const usedNumbers = new Set();
+  const usedColors = [...colors];
+  
+  for (let i = 0; i < 3; i++) {
+    let number;
+    do {
+      number = Math.floor(Math.random() * 9) + 1;
+    } while (usedNumbers.has(number));
+    usedNumbers.add(number);
+    
+    const colorIndex = Math.floor(Math.random() * usedColors.length);
+    const color = usedColors[colorIndex];
+    usedColors.splice(colorIndex, 1);
+    
+    memoryData.push({ number, color });
+  }
+  
+  return {
+    memoryData: memoryData,
+    seed: Math.random() // For deterministic challenge type selection
+  };
+}
+
 function generateGameData(gameType) {
   switch(gameType) {
     case 'findSix':
@@ -171,11 +233,11 @@ function generateGameData(gameType) {
     case 'findNine':
       return { grid: generateFindNineGrid() };
     case 'colorMatch':
-      return {}; // Color match generates its own data on client
+      return generateColorMatchData();
     case 'shapeMemory':
-      return {}; // Shape memory generates its own data on client
+      return generateShapeMemoryData();
     case 'memoryChallenge':
-      return {}; // Memory challenge generates its own data on client
+      return generateMemoryChallengeData();
     default:
       return {};
   }
@@ -874,6 +936,14 @@ io.on('connection', socket => {
     io.to(room).emit('timerUpdate', { 
       personalTimers: rooms[room].personalTimers,
       bonusReceiver: partnerColor,
+      bonusAmount: success ? GAME_CONSTANTS.SUCCESS_BONUS : -GAME_CONSTANTS.FAILURE_PENALTY
+    });
+    
+    // Emit bonus animation event to all players so everyone sees the arrow
+    io.to(room).emit('bonusAnimation', {
+      sourceColor: color,
+      receiverColor: partnerColor,
+      success: success,
       bonusAmount: success ? GAME_CONSTANTS.SUCCESS_BONUS : -GAME_CONSTANTS.FAILURE_PENALTY
     });
     
