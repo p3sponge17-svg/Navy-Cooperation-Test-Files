@@ -950,6 +950,13 @@ socket.on('timerUpdate', (data) => {
   }
 });
 
+// NEW: Socket handler for bonus animation - shows arrow for all players
+socket.on('bonusAnimation', (data) => {
+  console.log('Bonus animation event received:', data);
+  // Show bonus arrow animation from source to receiver
+  showBonusArrowForAll(data.sourceColor, data.receiverColor, data.success);
+});
+
 // NEW: Socket handler for when a player's timer expires
 socket.on('nextRound', (data) => {
   console.log('Loading next round:', data);
@@ -1230,22 +1237,22 @@ function loadGameInSection(section, gameType, gameData, playerColor) {
       gameTitle.textContent = 'COLOR MATCH';
       grid.style.display = 'none';
       colorMatchGame.style.display = 'flex';
-      // Always set up the game, but only make it interactive for the owner
-      setupColorMatch(section, isMySection);
+      // Always set up the game using server-provided data
+      setupColorMatch(section, gameData, isMySection);
       break;
     case 'shapeMemory':
       gameTitle.textContent = 'SHAPE MEMORY';
       grid.style.display = 'none';
       colorMatchGame.style.display = 'flex';
-      // Always set up the game, but only make it interactive for the owner
-      setupShapeMemory(section, isMySection);
+      // Always set up the game using server-provided data
+      setupShapeMemory(section, gameData, isMySection);
       break;
     case 'memoryChallenge':
       gameTitle.textContent = 'MEMORY CHALLENGE';
       grid.style.display = 'none';
       colorMatchGame.style.display = 'flex';
-      // Always set up the game, but only make it interactive for the owner
-      setupMemoryChallenge(section, isMySection);
+      // Always set up the game using server-provided data
+      setupMemoryChallenge(section, gameData, isMySection);
       break;
   }
   
@@ -1760,8 +1767,8 @@ function setupFindNine(section, grid, isInteractive = true) {
   statusMessage.style.color = '#00ff00';
 }
 
-function setupColorMatch(section, isInteractive = true) {
-  console.log(`Setting up Color Match game in section ${section}, interactive: ${isInteractive}`);
+function setupColorMatch(section, gameData, isInteractive = true) {
+  console.log(`Setting up Color Match game in section ${section}, interactive: ${isInteractive}, gameData:`, gameData);
   
   const colorMatchGame = document.getElementById(`colorMatchGame${section}`);
   colorMatchGame.innerHTML = '';
@@ -1791,16 +1798,24 @@ function setupColorMatch(section, isInteractive = true) {
   
   colorMatchGame.appendChild(targetElement);
   
-  let currentColorIndex = 0;
-  let currentNameIndex = 0;
+  // Use server-provided initial indices
+  let currentColorIndex = gameData.initialColorIndex || 0;
+  let currentNameIndex = gameData.initialNameIndex || 0;
   let colorInterval;
   let nameInterval;
   let gameCompleted = false;
 
+  // Use server seed for deterministic randomness
+  let seedValue = gameData.seed || Math.random();
+  function seededRandom() {
+    seedValue = (seedValue * 9301 + 49297) % 233280;
+    return seedValue / 233280;
+  }
+
   function getRandomIndex(excludeIndex = -1) {
     let newIndex;
     do {
-      newIndex = Math.floor(Math.random() * colors.length);
+      newIndex = Math.floor(seededRandom() * colors.length);
     } while (newIndex === excludeIndex && colors.length > 1);
     return newIndex;
   }
@@ -1965,24 +1980,29 @@ function setupColorMatch(section, isInteractive = true) {
   statusMessage.style.color = '#00ff00';
 }
 
-function setupShapeMemory(section, isInteractive = true) {
-  console.log(`Setting up Shape Memory game in section ${section}, interactive: ${isInteractive}`);
+function setupShapeMemory(section, gameData, isInteractive = true) {
+  console.log(`Setting up Shape Memory game in section ${section}, interactive: ${isInteractive}, gameData:`, gameData);
   
   const colorMatchGame = document.getElementById(`colorMatchGame${section}`);
   colorMatchGame.innerHTML = '';
   
-  const shapes = ['●', '■', '▲', '◆'];
-  const colors = ['red', 'blue', 'green', 'yellow'];
+  // Use server-provided data
+  const memoryShapes = gameData.memoryShapes || [];
+  const targetIndex = gameData.targetIndex || 0;
   
-  const shuffledShapes = [...shapes].sort(() => Math.random() - 0.5);
-  const shuffledColors = [...colors].sort(() => Math.random() - 0.5);
+  // Fallback to client generation if no server data (shouldn't happen)
+  if (memoryShapes.length === 0) {
+    console.warn('No server data for shape memory, using fallback');
+    const shapes = ['●', '■', '▲', '◆'];
+    const colors = ['red', 'blue', 'green', 'yellow'];
+    const shuffledShapes = [...shapes].sort(() => Math.random() - 0.5);
+    const shuffledColors = [...colors].sort(() => Math.random() - 0.5);
+    memoryShapes.push(...shuffledShapes.slice(0, 4).map((shape, i) => ({
+      shape: shape,
+      color: shuffledColors[i]
+    })));
+  }
   
-  const memoryShapes = shuffledShapes.slice(0, 4).map((shape, i) => ({
-    shape: shape,
-    color: shuffledColors[i]
-  }));
-  
-  const targetIndex = Math.floor(Math.random() * 4);
   const targetShape = memoryShapes[targetIndex];
   
   const memContainer = document.createElement('div');
@@ -2010,6 +2030,10 @@ function setupShapeMemory(section, isInteractive = true) {
   const statusMessage = document.getElementById(`statusMessage${section}`);
   statusMessage.textContent = 'MEMORIZE SHAPES AND COLORS';
   statusMessage.style.color = '#00ff00';
+  
+  // Store shapes and colors for use in callback
+  const shapes = ['●', '■', '▲', '◆'];
+  const colors = ['red', 'blue', 'green', 'yellow'];
   
   waitForCountdownThen(() => {
     memContainer.innerHTML = '';
@@ -2108,8 +2132,8 @@ function setupShapeMemory(section, isInteractive = true) {
 }
 
 // Memory Challenge Game
-function setupMemoryChallenge(section, isInteractive = true) {
-  console.log(`Setting up Memory Challenge game in section ${section}, interactive: ${isInteractive}`);
+function setupMemoryChallenge(section, gameData, isInteractive = true) {
+  console.log(`Setting up Memory Challenge game in section ${section}, interactive: ${isInteractive}, gameData:`, gameData);
   
   const colorMatchGame = document.getElementById(`colorMatchGame${section}`);
   colorMatchGame.innerHTML = '';
@@ -2118,15 +2142,23 @@ function setupMemoryChallenge(section, isInteractive = true) {
   const gameState = {
     active: isInteractive, // Only active if interactive
     phase: 'memory',
-    memoryData: null,
+    memoryData: gameData.memoryData || null, // Use server-provided data
     currentChallenge: null,
     consecutiveType1: 0,
     consecutiveType2: 0,
     maxConsecutive: 3,
-    transitionTimeout: null  // Track timeout for cleanup
+    transitionTimeout: null,  // Track timeout for cleanup
+    seed: gameData.seed || Math.random() // Server seed for deterministic challenge selection
   };
 
   const colors = ['#ff4444', '#4444ff', '#44aa44', '#ffaa00'];
+  
+  // Seeded random for deterministic behavior
+  let seedValue = gameState.seed;
+  function seededRandom() {
+    seedValue = (seedValue * 9301 + 49297) % 233280;
+    return seedValue / 233280;
+  }
 
   function setupMemoryPhase() {
     const memoryContainer = document.createElement('div');
@@ -2147,24 +2179,31 @@ function setupMemoryChallenge(section, isInteractive = true) {
     memoryDisplay.style.margin = '20px 0';
     memoryDisplay.style.flexWrap = 'wrap';
 
-    // Generate memory data
-    gameState.memoryData = [];
-    const usedNumbers = new Set();
-    const usedColors = [...colors];
+    // Use server-provided memory data if available
+    if (!gameState.memoryData || gameState.memoryData.length === 0) {
+      // Fallback: Generate memory data (shouldn't happen with server data)
+      console.warn('No server data for memory challenge, using fallback');
+      gameState.memoryData = [];
+      const usedNumbers = new Set();
+      const usedColors = [...colors];
+      
+      for (let i = 0; i < 3; i++) {
+        let number;
+        do {
+          number = Math.floor(Math.random() * 9) + 1;
+        } while (usedNumbers.has(number));
+        usedNumbers.add(number);
+        
+        const colorIndex = Math.floor(Math.random() * usedColors.length);
+        const color = usedColors[colorIndex];
+        usedColors.splice(colorIndex, 1);
+        
+        gameState.memoryData.push({ number, color });
+      }
+    }
     
-    for (let i = 0; i < 3; i++) {
-      let number;
-      do {
-        number = Math.floor(Math.random() * 9) + 1;
-      } while (usedNumbers.has(number));
-      usedNumbers.add(number);
-      
-      const colorIndex = Math.floor(Math.random() * usedColors.length);
-      const color = usedColors[colorIndex];
-      usedColors.splice(colorIndex, 1);
-      
-      gameState.memoryData.push({ number, color });
-      
+    // Display memory data
+    gameState.memoryData.forEach(item => {
       const circle = document.createElement('div');
       circle.style.width = '80px';
       circle.style.height = '80px';
@@ -2178,10 +2217,10 @@ function setupMemoryChallenge(section, isInteractive = true) {
       circle.style.textShadow = '0 0 5px #000';
       circle.style.border = '3px solid #000';
       circle.style.boxShadow = '0 0 0 3px #000, 0 0 0 6px currentColor';
-      circle.style.color = color;
-      circle.textContent = number;
+      circle.style.color = item.color;
+      circle.textContent = item.number;
       memoryDisplay.appendChild(circle);
-    }
+    });
 
     memoryContainer.appendChild(heading);
     memoryContainer.appendChild(memoryDisplay);
@@ -2207,14 +2246,14 @@ function setupMemoryChallenge(section, isInteractive = true) {
     const challengeContainer = document.createElement('div');
     challengeContainer.className = 'challenge-container';
     
-    // Determine challenge type with balanced randomness
+    // Determine challenge type with balanced randomness using seeded random
     let challengeType;
     if (gameState.consecutiveType1 >= gameState.maxConsecutive) {
       challengeType = 2;
     } else if (gameState.consecutiveType2 >= gameState.maxConsecutive) {
       challengeType = 1;
     } else {
-      challengeType = Math.random() < 0.5 ? 1 : 2;
+      challengeType = seededRandom() < 0.5 ? 1 : 2;
     }
     
     if (challengeType === 1) {
@@ -2547,6 +2586,81 @@ function getSectionByColor(targetColor) {
   };
   const sectionNum = colorToSection[targetColor];
   return document.getElementById(`section${sectionNum}`);
+}
+
+/**
+ * Show bonus arrow animation for all players (triggered by server event)
+ */
+function showBonusArrowForAll(sourceColor, receiverColor, success) {
+  console.log(`Showing bonus arrow: ${sourceColor} → ${receiverColor} (${success ? 'success' : 'failure'})`);
+  
+  // Get positions
+  const sourceSection = getSectionByColor(sourceColor);
+  const targetSection = getSectionByColor(receiverColor);
+  
+  if (!sourceSection || !targetSection) {
+    console.warn('Could not find sections for bonus arrow animation');
+    return;
+  }
+  
+  const sourceRect = sourceSection.getBoundingClientRect();
+  const targetRect = targetSection.getBoundingClientRect();
+  
+  // Calculate centers
+  const startX = sourceRect.left + sourceRect.width / 2;
+  const startY = sourceRect.top + sourceRect.height / 2;
+  const endX = targetRect.left + targetRect.width / 2;
+  const endY = targetRect.top + targetRect.height / 2;
+  
+  // Create container
+  const container = document.createElement('div');
+  container.className = 'bonus-arrow-container';
+  
+  // Create indicator in source quadrant
+  const indicator = document.createElement('div');
+  indicator.className = 'bonus-indicator';
+  indicator.textContent = success ? '+4' : '-3';
+  indicator.style.left = `${startX}px`;
+  indicator.style.top = `${startY}px`;
+  indicator.style.transform = 'translate(-50%, -50%)';
+  indicator.style.color = success ? '#00ff00' : '#ff4444';
+  container.appendChild(indicator);
+  
+  // Create arrow element
+  const arrow = document.createElement('div');
+  arrow.className = 'bonus-arrow';
+  arrow.textContent = success ? '➜+4' : '➜-3';
+  arrow.style.left = `${startX}px`;
+  arrow.style.top = `${startY}px`;
+  arrow.style.transform = 'translate(-50%, -50%)';
+  arrow.style.color = success ? '#00ff00' : '#ff4444';
+  
+  // Calculate rotation angle for arrow direction
+  const angle = Math.atan2(endY - startY, endX - startX) * (180 / Math.PI);
+  arrow.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+  
+  container.appendChild(arrow);
+  document.body.appendChild(container);
+  
+  // Animate arrow shooting to target
+  setTimeout(() => {
+    arrow.classList.add('shooting');
+    arrow.style.left = `${endX}px`;
+    arrow.style.top = `${endY}px`;
+    arrow.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+  }, 500); // Delay to show the indicator first
+  
+  // Mark arrow as arrived
+  setTimeout(() => {
+    arrow.classList.add('arrived');
+  }, 1700); // 500ms delay + 1200ms transition
+  
+  // Cleanup after animation
+  setTimeout(() => {
+    if (container && container.parentNode) {
+      container.parentNode.removeChild(container);
+    }
+  }, 2000);
 }
 
 /**
