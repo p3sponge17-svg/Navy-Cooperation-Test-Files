@@ -1238,7 +1238,6 @@ function loadGameInSection(section, gameType, gameData, playerColor) {
   colorMatchGame.innerHTML = '';
   
   // CRITICAL: Reset completion flags for this section to prevent "already completed" bug
-  const sectionKey = `section${section}`;
   colorMatchIntervals[sectionKey].completed = false;
   
   // Clear any lingering intervals from previous games
