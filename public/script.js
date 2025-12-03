@@ -10,7 +10,9 @@ const GAME_CONSTANTS = {
   MAX_NUMBERS: 12,
   MOUSE_EMIT_THROTTLE: 50,
   ROUND_TRANSITION_DELAY: 1500,
-  GAME_OVER_RELOAD_DELAY: 5000
+  GAME_OVER_RELOAD_DELAY: 5000,
+  FALLBACK_BUFFER_MS: 250,  // Buffer time added to fallback timeout in waitForCountdownThen
+  GAME_LOAD_DELAY_MS: 80  // Delay before loading games to allow event listeners to attach
 };
 
 let color = null;
@@ -85,7 +87,7 @@ function waitForCountdownThen(callback, delayMs = 4000) {
         executed = true;
         callback();
       }
-    }, delayMs + 250);
+    }, delayMs + GAME_CONSTANTS.FALLBACK_BUFFER_MS);
     
     const listener = () => {
       clearTimeout(fallbackTimeout);
@@ -1111,7 +1113,7 @@ socket.on('returnToMiniGames', (data) => {
     applyPlayerColorsToSections(data.players);
   }
   
-  // Delay loading per-section games by ~80ms so listeners can attach
+  // Delay loading per-section games to allow event listeners to attach
   setTimeout(() => {
     // Load new games for all players
     const playerColors = Object.keys(data.gameAssignments);
@@ -1121,7 +1123,7 @@ socket.on('returnToMiniGames', (data) => {
     });
     
     console.log('Mini-games restarted with full timers');
-  }, 80);
+  }, GAME_CONSTANTS.GAME_LOAD_DELAY_MS);
 });
 
 socket.on('startNumberSequence', (data) => {
