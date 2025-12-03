@@ -65,25 +65,36 @@ let partnerReengaged = false;
 // Helper function: Wait for game countdown to start, then execute after delay
 // DEFENSIVE: Handles case where event occurred before listener was attached
 function waitForCountdownThen(callback, delayMs = 4000) {
+  // Track if callback has been scheduled to prevent duplicate execution
+  let callbackScheduled = false;
+  
+  const scheduleCallback = () => {
+    if (!callbackScheduled) {
+      callbackScheduled = true;
+      setTimeout(callback, delayMs);
+    }
+  };
+  
   if (gameCountdownActive) {
     // Countdown already started, schedule callback immediately with the delay
     // This handles the case where the countdown started before this function was called
-    setTimeout(callback, delayMs);
+    scheduleCallback();
   } else {
     // Wait for countdown to start, then add the delay
     const listener = () => {
-      setTimeout(callback, delayMs);
+      scheduleCallback();
       window.removeEventListener('gameCountdownStarted', listener);
     };
     window.addEventListener('gameCountdownStarted', listener);
     
     // DEFENSIVE CHECK: In case the countdown becomes active while we're setting up the listener
     // This prevents a race condition where the event fires between our check and listener setup
+    // Using a small timeout (100ms) to allow the event loop to process any pending events
     setTimeout(() => {
-      if (gameCountdownActive) {
+      if (gameCountdownActive && !callbackScheduled) {
         // Event might have been missed, ensure callback still fires
         window.removeEventListener('gameCountdownStarted', listener);
-        setTimeout(callback, delayMs);
+        scheduleCallback();
       }
     }, 100);
   }
