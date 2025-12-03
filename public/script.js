@@ -10,7 +10,8 @@ const GAME_CONSTANTS = {
   MAX_NUMBERS: 12,
   MOUSE_EMIT_THROTTLE: 50,
   ROUND_TRANSITION_DELAY: 1500,
-  GAME_OVER_RELOAD_DELAY: 5000
+  GAME_OVER_RELOAD_DELAY: 5000,
+  RACE_CONDITION_CHECK_DELAY: 100  // Delay for checking race conditions in event listeners
 };
 
 let color = null;
@@ -89,14 +90,14 @@ function waitForCountdownThen(callback, delayMs = 4000) {
     
     // DEFENSIVE CHECK: In case the countdown becomes active while we're setting up the listener
     // This prevents a race condition where the event fires between our check and listener setup
-    // Using a small timeout (100ms) to allow the event loop to process any pending events
+    // Using a small timeout to allow the event loop to process any pending events
     setTimeout(() => {
       if (gameCountdownActive && !callbackScheduled) {
         // Event might have been missed, ensure callback still fires
         window.removeEventListener('gameCountdownStarted', listener);
         scheduleCallback();
       }
-    }, 100);
+    }, GAME_CONSTANTS.RACE_CONDITION_CHECK_DELAY);
   }
 }
 
