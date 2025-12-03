@@ -63,17 +63,40 @@ let reengageRequested = false;
 let partnerReengaged = false;
 
 // Helper function: Wait for game countdown to start, then execute after delay
+// Race Condition Fix: Adds a fallback timeout to ensure callback runs even if
+// the 'gameCountdownStarted' event was dispatched before listeners could attach.
+// This prevents memory game previews from being skipped when returning from Number Sequence.
 function waitForCountdownThen(callback, delayMs = 4000) {
   if (gameCountdownActive) {
     // Countdown already started, just wait the delay
     setTimeout(callback, delayMs);
   } else {
     // Wait for countdown to start, then add the delay
+    let callbackExecuted = false;
+    
+    const executeCallback = () => {
+      if (!callbackExecuted) {
+        callbackExecuted = true;
+        setTimeout(callback, delayMs);
+      }
+    };
+    
     const listener = () => {
-      setTimeout(callback, delayMs);
+      executeCallback();
       window.removeEventListener('gameCountdownStarted', listener);
     };
+    
     window.addEventListener('gameCountdownStarted', listener);
+    
+    // Fallback timeout: If event was missed due to race condition,
+    // still execute callback after delayMs + 250ms
+    setTimeout(() => {
+      if (!callbackExecuted) {
+        console.warn('gameCountdownStarted event was missed - using fallback timeout');
+        executeCallback();
+        window.removeEventListener('gameCountdownStarted', listener);
+      }
+    }, delayMs + 250);
   }
 }
 
@@ -1074,17 +1097,27 @@ socket.on('returnToMiniGames', (data) => {
   // Show game screen if not already visible
   showScreen('gameScreen');
   
-  // Apply player colors to all sections
-  applyPlayerColors();
+  // Apply player colors to all sections (use correct function with data.players)
+  if (data.players) {
+    applyPlayerColorsToSections(data.players);
+  }
   
-  // Load new games for all players
-  const playerColors = Object.keys(data.gameAssignments);
-  playerColors.forEach((playerColor, index) => {
-    const assignment = data.gameAssignments[playerColor];
-    loadGameInSection(index + 1, assignment.gameType, assignment.gameData, playerColor);
-  });
+  // CRITICAL: Set gameCountdownActive and dispatch event BEFORE loading games
+  // so that memory game listeners can attach before event fires
+  gameCountdownActive = true;
+  window.dispatchEvent(new Event('gameCountdownStarted'));
   
-  console.log('Mini-games restarted with full timers');
+  // Load new games for all players with a small delay (80ms) to allow
+  // memory game event listeners to attach before the event is dispatched
+  setTimeout(() => {
+    const playerColors = Object.keys(data.gameAssignments);
+    playerColors.forEach((playerColor, index) => {
+      const assignment = data.gameAssignments[playerColor];
+      loadGameInSection(index + 1, assignment.gameType, assignment.gameData, playerColor);
+    });
+    
+    console.log('Mini-games restarted with full timers');
+  }, 80);
 });
 
 socket.on('startNumberSequence', (data) => {
@@ -1238,14 +1271,16 @@ function loadGameInSection(section, gameType, gameData, playerColor) {
       grid.style.display = 'none';
       colorMatchGame.style.display = 'flex';
       // Always set up the game, but only make it interactive for the owner
-      setupShapeMemory(section, isMySection);
+      // Pass gameData (may be empty object if server doesn't generate it)
+      setupShapeMemory(section, gameData, isMySection);
       break;
     case 'memoryChallenge':
       gameTitle.textContent = 'MEMORY CHALLENGE';
       grid.style.display = 'none';
       colorMatchGame.style.display = 'flex';
       // Always set up the game, but only make it interactive for the owner
-      setupMemoryChallenge(section, isMySection);
+      // Pass gameData (may be empty object if server doesn't generate it)
+      setupMemoryChallenge(section, gameData, isMySection);
       break;
   }
   
@@ -1965,26 +2000,49 @@ function setupColorMatch(section, isInteractive = true) {
   statusMessage.style.color = '#00ff00';
 }
 
-function setupShapeMemory(section, isInteractive = true) {
+function setupShapeMemory(section, gameData, isInteractive = true) {
   console.log(`Setting up Shape Memory game in section ${section}, interactive: ${isInteractive}`);
   
   const colorMatchGame = document.getElementById(`colorMatchGame${section}`);
+  if (!colorMatchGame) {
+    console.error(`colorMatchGame${section} not found`);
+    return;
+  }
+  
   colorMatchGame.innerHTML = '';
+  
+  // Check if container already has transition flag to prevent double transitions
+  if (colorMatchGame.dataset.shapeMemoryTransitioned === 'true') {
+    console.warn(`Shape Memory in section ${section} already transitioned`);
+    return;
+  }
   
   const shapes = ['●', '■', '▲', '◆'];
   const colors = ['red', 'blue', 'green', 'yellow'];
   
-  const shuffledShapes = [...shapes].sort(() => Math.random() - 0.5);
-  const shuffledColors = [...colors].sort(() => Math.random() - 0.5);
+  // Use server-generated gameData if available, otherwise generate locally
+  let memoryShapes, targetShape, selectionOptions;
   
-  const memoryShapes = shuffledShapes.slice(0, 4).map((shape, i) => ({
-    shape: shape,
-    color: shuffledColors[i]
-  }));
+  if (gameData && gameData.memoryShapes && gameData.targetShape) {
+    // Server provided the data
+    memoryShapes = gameData.memoryShapes;
+    targetShape = gameData.targetShape;
+    selectionOptions = gameData.selectionOptions || [];
+  } else {
+    // Generate locally (fallback for when server doesn't provide data)
+    const shuffledShapes = [...shapes].sort(() => Math.random() - 0.5);
+    const shuffledColors = [...colors].sort(() => Math.random() - 0.5);
+    
+    memoryShapes = shuffledShapes.slice(0, 4).map((shape, i) => ({
+      shape: shape,
+      color: shuffledColors[i]
+    }));
+    
+    const targetIndex = Math.floor(Math.random() * 4);
+    targetShape = memoryShapes[targetIndex];
+  }
   
-  const targetIndex = Math.floor(Math.random() * 4);
-  const targetShape = memoryShapes[targetIndex];
-  
+  // Render preview grid
   const memContainer = document.createElement('div');
   memContainer.className = 'shape-memory-container';
   memContainer.style.display = 'grid';
@@ -2008,10 +2066,27 @@ function setupShapeMemory(section, isInteractive = true) {
   colorMatchGame.appendChild(memContainer);
   
   const statusMessage = document.getElementById(`statusMessage${section}`);
-  statusMessage.textContent = 'MEMORIZE SHAPES AND COLORS';
-  statusMessage.style.color = '#00ff00';
+  if (statusMessage) {
+    statusMessage.textContent = 'MEMORIZE SHAPES AND COLORS';
+    statusMessage.style.color = '#00ff00';
+  }
   
-  waitForCountdownThen(() => {
+  // Use waitForCountdownThen to transition to selection phase after 4 seconds
+  const showSelectionPhase = () => {
+    // Guard: Only proceed if container still exists and hasn't been transitioned
+    if (!colorMatchGame || !memContainer.parentNode) {
+      console.warn(`Shape Memory container removed before selection phase for section ${section}`);
+      return;
+    }
+    
+    if (colorMatchGame.dataset.shapeMemoryTransitioned === 'true') {
+      console.warn(`Shape Memory section ${section} already transitioned to selection phase`);
+      return;
+    }
+    
+    // Mark as transitioned to prevent double execution
+    colorMatchGame.dataset.shapeMemoryTransitioned = 'true';
+    
     memContainer.innerHTML = '';
     
     const instruction = document.createElement('div');
@@ -2020,14 +2095,17 @@ function setupShapeMemory(section, isInteractive = true) {
     instruction.style.marginBottom = '20px';
     memContainer.appendChild(instruction);
     
-    const options = [targetShape];
-    const wrongShapes = shapes.filter(s => s !== targetShape.shape).sort(() => Math.random() - 0.5).slice(0, 2);
-    wrongShapes.forEach(shape => {
-      const wrongColor = colors.filter(c => c !== targetShape.color)[Math.floor(Math.random() * 3)];
-      options.push({ shape, color: wrongColor });
-    });
-    
-    options.sort(() => Math.random() - 0.5);
+    // Generate selection options if not provided by server
+    let options = selectionOptions;
+    if (!options || options.length === 0) {
+      options = [targetShape];
+      const wrongShapes = shapes.filter(s => s !== targetShape.shape).sort(() => Math.random() - 0.5).slice(0, 2);
+      wrongShapes.forEach(shape => {
+        const wrongColor = colors.filter(c => c !== targetShape.color)[Math.floor(Math.random() * 3)];
+        options.push({ shape, color: wrongColor });
+      });
+      options.sort(() => Math.random() - 0.5);
+    }
     
     const optionsContainer = document.createElement('div');
     optionsContainer.style.display = 'flex';
@@ -2076,8 +2154,10 @@ function setupShapeMemory(section, isInteractive = true) {
           if (isCorrect) {
             console.log('Shape memory correct! Completing round with SUCCESS...');
             optionDiv.style.border = '2px solid #00ff00';
-            statusMessage.textContent = 'CORRECT!';
-            statusMessage.style.color = '#00ff00';
+            if (statusMessage) {
+              statusMessage.textContent = 'CORRECT!';
+              statusMessage.style.color = '#00ff00';
+            }
             
             setTimeout(() => {
               completeRound(true);  // Success
@@ -2085,8 +2165,10 @@ function setupShapeMemory(section, isInteractive = true) {
           } else {
             console.log('Shape memory WRONG! Completing round with FAILURE...');
             optionDiv.style.border = '2px solid #ff4444';
-            statusMessage.textContent = 'WRONG!';
-            statusMessage.style.color = '#ff4444';
+            if (statusMessage) {
+              statusMessage.textContent = 'WRONG!';
+              statusMessage.style.color = '#ff4444';
+            }
             
             setTimeout(() => {
               completeRound(false);  // Failure
@@ -2103,16 +2185,32 @@ function setupShapeMemory(section, isInteractive = true) {
     });
     
     memContainer.appendChild(optionsContainer);
-    statusMessage.textContent = isInteractive ? 'SELECT THE MATCHING SHAPE' : 'PARTNER\'S GAME';
-  }, 4000);
+    if (statusMessage) {
+      statusMessage.textContent = isInteractive ? 'SELECT THE MATCHING SHAPE' : 'PARTNER\'S GAME';
+    }
+  };
+  
+  // Wait for countdown to start, then transition after 4 seconds
+  waitForCountdownThen(showSelectionPhase, 4000);
 }
 
 // Memory Challenge Game
-function setupMemoryChallenge(section, isInteractive = true) {
+function setupMemoryChallenge(section, gameData, isInteractive = true) {
   console.log(`Setting up Memory Challenge game in section ${section}, interactive: ${isInteractive}`);
   
   const colorMatchGame = document.getElementById(`colorMatchGame${section}`);
+  if (!colorMatchGame) {
+    console.error(`colorMatchGame${section} not found`);
+    return;
+  }
+  
   colorMatchGame.innerHTML = '';
+  
+  // Check if container already has transition flag to prevent double transitions
+  if (colorMatchGame.dataset.memoryChallengeTransitioned === 'true') {
+    console.warn(`Memory Challenge in section ${section} already transitioned`);
+    return;
+  }
 
   // Game state for this section
   const gameState = {
@@ -2147,24 +2245,32 @@ function setupMemoryChallenge(section, isInteractive = true) {
     memoryDisplay.style.margin = '20px 0';
     memoryDisplay.style.flexWrap = 'wrap';
 
-    // Generate memory data
-    gameState.memoryData = [];
-    const usedNumbers = new Set();
-    const usedColors = [...colors];
+    // Use server-generated gameData if available, otherwise generate locally
+    if (gameData && gameData.memoryData && Array.isArray(gameData.memoryData)) {
+      gameState.memoryData = gameData.memoryData;
+    } else {
+      // Generate memory data locally (fallback)
+      gameState.memoryData = [];
+      const usedNumbers = new Set();
+      const usedColors = [...colors];
+      
+      for (let i = 0; i < 3; i++) {
+        let number;
+        do {
+          number = Math.floor(Math.random() * 9) + 1;
+        } while (usedNumbers.has(number));
+        usedNumbers.add(number);
+        
+        const colorIndex = Math.floor(Math.random() * usedColors.length);
+        const color = usedColors[colorIndex];
+        usedColors.splice(colorIndex, 1);
+        
+        gameState.memoryData.push({ number, color });
+      }
+    }
     
-    for (let i = 0; i < 3; i++) {
-      let number;
-      do {
-        number = Math.floor(Math.random() * 9) + 1;
-      } while (usedNumbers.has(number));
-      usedNumbers.add(number);
-      
-      const colorIndex = Math.floor(Math.random() * usedColors.length);
-      const color = usedColors[colorIndex];
-      usedColors.splice(colorIndex, 1);
-      
-      gameState.memoryData.push({ number, color });
-      
+    // Display memory data
+    gameState.memoryData.forEach(item => {
       const circle = document.createElement('div');
       circle.style.width = '80px';
       circle.style.height = '80px';
@@ -2178,10 +2284,10 @@ function setupMemoryChallenge(section, isInteractive = true) {
       circle.style.textShadow = '0 0 5px #000';
       circle.style.border = '3px solid #000';
       circle.style.boxShadow = '0 0 0 3px #000, 0 0 0 6px currentColor';
-      circle.style.color = color;
-      circle.textContent = number;
+      circle.style.color = item.color;
+      circle.textContent = item.number;
       memoryDisplay.appendChild(circle);
-    }
+    });
 
     memoryContainer.appendChild(heading);
     memoryContainer.appendChild(memoryDisplay);
@@ -2193,14 +2299,27 @@ function setupMemoryChallenge(section, isInteractive = true) {
       gameState.transitionTimeout = null;
     }
 
-    // Transition to challenge phase after 4 seconds
-    waitForCountdownThen(() => {
-      // Only proceed if the game is still active and container still exists
-      if (gameState.active && memoryContainer.parentNode) {
-        memoryContainer.remove();
-        setupChallengePhase();
+    // Use waitForCountdownThen to transition to challenge phase after 4 seconds
+    const transitionToChallengePhase = () => {
+      // Guard: Only proceed if the game is still active and container still exists
+      if (!gameState.active || !memoryContainer.parentNode || !colorMatchGame) {
+        console.warn(`Memory Challenge container removed before challenge phase for section ${section}`);
+        return;
       }
-    }, 4000);
+      
+      if (colorMatchGame.dataset.memoryChallengeTransitioned === 'true') {
+        console.warn(`Memory Challenge section ${section} already transitioned to challenge phase`);
+        return;
+      }
+      
+      // Mark as transitioned to prevent double execution
+      colorMatchGame.dataset.memoryChallengeTransitioned = 'true';
+      
+      memoryContainer.remove();
+      setupChallengePhase();
+    };
+    
+    waitForCountdownThen(transitionToChallengePhase, 4000);
   }
 
   function setupChallengePhase() {
@@ -2345,8 +2464,10 @@ function setupMemoryChallenge(section, isInteractive = true) {
     gameState.currentChallenge.correctAnswer = correctColor;
     
     const statusMessage = document.getElementById(`statusMessage${section}`);
-    statusMessage.textContent = 'SELECT THE CORRECT COLOR';
-    statusMessage.style.color = '#00ff00';
+    if (statusMessage) {
+      statusMessage.textContent = 'SELECT THE CORRECT COLOR';
+      statusMessage.style.color = '#00ff00';
+    }
   }
 
   function setupMathRecallChallenge(container) {
@@ -2455,16 +2576,20 @@ function setupMemoryChallenge(section, isInteractive = true) {
     gameState.currentChallenge.correctAnswer = correctTotal;
     
     const statusMessage = document.getElementById(`statusMessage${section}`);
-    statusMessage.textContent = 'SELECT THE CORRECT TOTAL';
-    statusMessage.style.color = '#00ff00';
+    if (statusMessage) {
+      statusMessage.textContent = 'SELECT THE CORRECT TOTAL';
+      statusMessage.style.color = '#00ff00';
+    }
   }
 
   // Start the memory challenge
   setupMemoryPhase();
 
   const statusMessage = document.getElementById(`statusMessage${section}`);
-  statusMessage.textContent = isInteractive ? 'MEMORIZE THE COLORS AND NUMBERS' : 'PARTNER\'S GAME';
-  statusMessage.style.color = '#00ff00';
+  if (statusMessage) {
+    statusMessage.textContent = isInteractive ? 'MEMORIZE THE COLORS AND NUMBERS' : 'PARTNER\'S GAME';
+    statusMessage.style.color = '#00ff00';
+  }
 }
 
 function completeRound(success = true) {
@@ -3256,14 +3381,14 @@ document.addEventListener('DOMContentLoaded', () => {
   if (roomCodeInput) {
     roomCodeInput.addEventListener('input', (e) => {
       const roomCode = e.target.value.trim().toUpperCase();
-      previewRoom(roomCode);
+      // previewRoom(roomCode); // TODO: Implement if needed
     });
     
     // Also trigger preview on focus if there's already a value
     roomCodeInput.addEventListener('focus', (e) => {
       const roomCode = e.target.value.trim().toUpperCase();
       if (roomCode) {
-        previewRoom(roomCode);
+        // previewRoom(roomCode); // TODO: Implement if needed
       }
     });
   }
