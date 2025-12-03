@@ -63,9 +63,11 @@ let reengageRequested = false;
 let partnerReengaged = false;
 
 // Helper function: Wait for game countdown to start, then execute after delay
+// DEFENSIVE: Handles case where event occurred before listener was attached
 function waitForCountdownThen(callback, delayMs = 4000) {
   if (gameCountdownActive) {
-    // Countdown already started, just wait the delay
+    // Countdown already started, schedule callback immediately with the delay
+    // This handles the case where the countdown started before this function was called
     setTimeout(callback, delayMs);
   } else {
     // Wait for countdown to start, then add the delay
@@ -74,6 +76,16 @@ function waitForCountdownThen(callback, delayMs = 4000) {
       window.removeEventListener('gameCountdownStarted', listener);
     };
     window.addEventListener('gameCountdownStarted', listener);
+    
+    // DEFENSIVE CHECK: In case the countdown becomes active while we're setting up the listener
+    // This prevents a race condition where the event fires between our check and listener setup
+    setTimeout(() => {
+      if (gameCountdownActive) {
+        // Event might have been missed, ensure callback still fires
+        window.removeEventListener('gameCountdownStarted', listener);
+        setTimeout(callback, delayMs);
+      }
+    }, 100);
   }
 }
 
@@ -1074,8 +1086,17 @@ socket.on('returnToMiniGames', (data) => {
   // Show game screen if not already visible
   showScreen('gameScreen');
   
-  // Apply player colors to all sections
-  applyPlayerColors();
+  // FIX: Start the game countdown and dispatch event BEFORE loading games
+  // This ensures any games that rely on 'gameCountdownStarted' event 
+  // (e.g., shapeMemory and memoryChallenge) will reliably receive it
+  startCountdown();
+  
+  // FIX: Apply player colors using the correct function with data
+  // Note: Sections already retain color classes from previous setup,
+  // but we apply them again to ensure consistency
+  if (data.players) {
+    applyPlayerColorsToSections(data.players);
+  }
   
   // Load new games for all players
   const playerColors = Object.keys(data.gameAssignments);
@@ -2011,6 +2032,9 @@ function setupShapeMemory(section, isInteractive = true) {
   statusMessage.textContent = 'MEMORIZE SHAPES AND COLORS';
   statusMessage.style.color = '#00ff00';
   
+  // DEFENSIVE: Use waitForCountdownThen to ensure preview phase always shows
+  // This handles the case where 'gameCountdownStarted' event may have already fired
+  // before this setup function was called (e.g., after Number Sequence completes)
   waitForCountdownThen(() => {
     memContainer.innerHTML = '';
     
@@ -2193,7 +2217,10 @@ function setupMemoryChallenge(section, isInteractive = true) {
       gameState.transitionTimeout = null;
     }
 
-    // Transition to challenge phase after 4 seconds
+    // DEFENSIVE: Transition to challenge phase after 4 seconds
+    // Use waitForCountdownThen to ensure preview phase always shows
+    // This handles the case where 'gameCountdownStarted' event may have already fired
+    // before this setup function was called (e.g., after Number Sequence completes)
     waitForCountdownThen(() => {
       // Only proceed if the game is still active and container still exists
       if (gameState.active && memoryContainer.parentNode) {
