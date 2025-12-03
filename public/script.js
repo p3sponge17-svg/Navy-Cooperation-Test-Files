@@ -10,7 +10,8 @@ const GAME_CONSTANTS = {
   MAX_NUMBERS: 12,
   MOUSE_EMIT_THROTTLE: 50,
   ROUND_TRANSITION_DELAY: 1500,
-  GAME_OVER_RELOAD_DELAY: 5000
+  GAME_OVER_RELOAD_DELAY: 5000,
+  RACE_CONDITION_CHECK_DELAY: 100  // Delay for checking race conditions in event listeners
 };
 
 let color = null;
@@ -63,17 +64,40 @@ let reengageRequested = false;
 let partnerReengaged = false;
 
 // Helper function: Wait for game countdown to start, then execute after delay
+// DEFENSIVE: Handles case where event occurred before listener was attached
 function waitForCountdownThen(callback, delayMs = 4000) {
+  // Track if callback has been scheduled to prevent duplicate execution
+  let callbackScheduled = false;
+  
+  const scheduleCallback = () => {
+    if (!callbackScheduled) {
+      callbackScheduled = true;
+      setTimeout(callback, delayMs);
+    }
+  };
+  
   if (gameCountdownActive) {
-    // Countdown already started, just wait the delay
-    setTimeout(callback, delayMs);
+    // Countdown already started, schedule callback immediately with the delay
+    // This handles the case where the countdown started before this function was called
+    scheduleCallback();
   } else {
     // Wait for countdown to start, then add the delay
     const listener = () => {
-      setTimeout(callback, delayMs);
+      scheduleCallback();
       window.removeEventListener('gameCountdownStarted', listener);
     };
     window.addEventListener('gameCountdownStarted', listener);
+    
+    // DEFENSIVE CHECK: In case the countdown becomes active while we're setting up the listener
+    // This prevents a race condition where the event fires between our check and listener setup
+    // Using a small timeout to allow the event loop to process any pending events
+    setTimeout(() => {
+      if (gameCountdownActive && !callbackScheduled) {
+        // Event might have been missed, ensure callback still fires
+        window.removeEventListener('gameCountdownStarted', listener);
+        scheduleCallback();
+      }
+    }, GAME_CONSTANTS.RACE_CONDITION_CHECK_DELAY);
   }
 }
 
@@ -1074,8 +1098,17 @@ socket.on('returnToMiniGames', (data) => {
   // Show game screen if not already visible
   showScreen('gameScreen');
   
-  // Apply player colors to all sections
-  applyPlayerColors();
+  // FIX: Start the game countdown and dispatch event BEFORE loading games
+  // This ensures any games that rely on 'gameCountdownStarted' event 
+  // (e.g., shapeMemory and memoryChallenge) will reliably receive it
+  startCountdown();
+  
+  // FIX: Apply player colors using the correct function with data
+  // Note: Sections already retain color classes from previous setup,
+  // but we apply them again to ensure consistency
+  if (data.players) {
+    applyPlayerColorsToSections(data.players);
+  }
   
   // Load new games for all players
   const playerColors = Object.keys(data.gameAssignments);
@@ -2011,6 +2044,9 @@ function setupShapeMemory(section, isInteractive = true) {
   statusMessage.textContent = 'MEMORIZE SHAPES AND COLORS';
   statusMessage.style.color = '#00ff00';
   
+  // DEFENSIVE: Use waitForCountdownThen to ensure preview phase always shows
+  // This handles the case where 'gameCountdownStarted' event may have already fired
+  // before this setup function was called (e.g., after Number Sequence completes)
   waitForCountdownThen(() => {
     memContainer.innerHTML = '';
     
@@ -2193,7 +2229,10 @@ function setupMemoryChallenge(section, isInteractive = true) {
       gameState.transitionTimeout = null;
     }
 
-    // Transition to challenge phase after 4 seconds
+    // DEFENSIVE: Transition to challenge phase after 4 seconds
+    // Use waitForCountdownThen to ensure preview phase always shows
+    // This handles the case where 'gameCountdownStarted' event may have already fired
+    // before this setup function was called (e.g., after Number Sequence completes)
     waitForCountdownThen(() => {
       // Only proceed if the game is still active and container still exists
       if (gameState.active && memoryContainer.parentNode) {
